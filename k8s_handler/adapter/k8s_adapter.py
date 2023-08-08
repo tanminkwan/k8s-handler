@@ -1,30 +1,25 @@
 from miniagent.adapter import Adapter
 from kubernetes import client, config
+from kubernetes.client.rest import ApiException
 import json
 
 class K8SApiCaller(Adapter):
 
-    def api_client(self, 
-                    k8s_api_key:str,
-                    k8s_api_key_prefix:str,
-                    k8s_host:str,
-                    k8s_ssl_ca_cert:str,
-                    k8s_verify_ssl:bool,
-                ) -> client.CoreV1Api:
+    def _datetime2str(self, o:dict) -> dict:
+        return json.loads(json.dumps(o, default=str))
+
+    def init_caller(self, 
+                    config: config
+                ) :
         
-        config = client.Configuration()
+        self.batchv1api_client = client.BatchV1Api(client.ApiClient(config))
+        self.corev1api_client = client.CoreV1Api(client.ApiClient(config))
+        self.apisv1api_client = client.AppsV1Api(client.ApiClient(config))
+        self.customapi_client = client.CustomObjectsApi(client.ApiClient(config))
 
-        config.api_key['authorization']        = k8s_api_key
-        config.api_key_prefix['authorization'] = k8s_api_key_prefix
-        config.host                            = k8s_host
-        config.ssl_ca_cert                     = k8s_ssl_ca_cert
-        config.verify_ssl                      = k8s_verify_ssl
+    def get_all_external_services(self, param:dict) -> tuple[int, dict]:
 
-        return client.CoreV1Api(client.ApiClient(config))
-
-    def get_services(self, api_client:client.CoreV1Api) -> tuple[int, dict]:
-
-        ret = api_client.list_service_for_all_namespaces(watch=False)
+        ret = self.corev1api_client.list_service_for_all_namespaces(watch=False)
 
         k8s_hosts = []
 
@@ -69,11 +64,119 @@ class K8SApiCaller(Adapter):
                             )
                 k8s_hosts.append(k8s_host)
         """
-        
-        status = 1
-        result = {"k8s_services":k8s_hosts}
+        return 1, {"results":k8s_hosts}
 
-        return status, result
+    def get_service(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        service_name = param['service_name']
+
+        api_response = self.corev1api_client.read_namespaced_service(service_name, namespace)
+
+        result = self._datetime2str(api_response.to_dict())
+        return 1, {"result":result}
+
+    def get_services(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+
+        api_response = self.corev1api_client.list_namespaced_service(namespace)
+
+        results = self._datetime2str(api_response.to_dict())
+        return 1, {"results":results}
+
+    def create_service(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        body = param['service']
+
+        api_response = self.corev1api_client.create_namespaced_service(namespace, body)
+
+        return 1, {"result":"OK"}
+
+    def delete_service(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        service_name = param['service_name']
+
+        api_response = self.corev1api_client.delete_namespaced_service(service_name, namespace)
+
+        return 1, {"result":"OK"}
+
+    def get_deployment(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        deployment_name = param['deployment_name']
+
+        api_response = self.apisv1api_client.read_namespaced_deployment(deployment_name, namespace)
+
+        result = self._datetime2str(api_response.to_dict())
+        return 1, {"result":result}
+
+    def create_deployment(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        body = param['deployment']
+
+        #try:
+        #    api_response = self.apisv1api_client.create_namespaced_deployment(namespace, body)
+        #except ApiException as e:
+        #    pass
+        api_response = self.apisv1api_client.create_namespaced_deployment(namespace, body)
+
+        return 1, {"result":"OK"}
+
+    def delete_deployment(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        deployment_name = param['deployment_name']
+
+        api_response = self.apisv1api_client.delete_namespaced_deployment(deployment_name, namespace)
+
+        return 1, {"result":"OK"}
+
+    def create_job(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        body = param['job']
+
+        api_response = self.batchv1api_client.create_namespaced_job(namespace, body)
+
+        return 1, {"result":"OK"}
     
+    def patch_custom_object(self, param:dict) -> tuple[int, dict]:
+
+        namespace   = param['namespace']
+        object_name = param['object_name']
+        group       = param['group']
+        version     = param['version']
+        plural      = param['plural']
+        patch_function_name   = param['patch_function_name']
+        patch_function_code   = param['patch_function_code']
+
+        target_object = self.customapi_client.get_namespaced_custom_object(
+            group=group,
+            version=version,
+            namespace=namespace,
+            plural=plural,
+            name=object_name
+        )
+        
+        local_vars = {}
+        exec(patch_function_code, local_vars)
+        f = local_vars[patch_function_name]
+        f(target_object)
+
+        patched_object = self.customapi_client.patch_namespaced_custom_object(
+            group=group,
+            version=version,
+            namespace=namespace,
+            plural=plural,
+            name=object_name,
+            body=target_object
+        )
+
+        return 1, {"result":"OK"}
+
     def get_status(self) -> int:
         return 1

@@ -1,2 +1,2 @@
-miniagent==0.0.15
+miniagent==0.0.18
 kubernetes==27.2.0
