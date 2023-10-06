@@ -85,7 +85,23 @@ class Deployments(Resource):
         
         return _call_n_return(param)
 
+class Scale(Resource):
+
+    def put(self, namespace, deployment, replicas):
+        
+        param = dict(
+                api = 'change_replicas' ,
+                namespace   = namespace,
+                deployment_name = deployment,
+                replicas = replicas
+            )
+        
+        return _call_n_return(param)
+
 class Deployment(Resource):
+
+    parser = reqparse.RequestParser()
+    parser.add_argument('deployment_object', type=dict)
 
     def get(self, namespace, deployment):
 
@@ -107,19 +123,40 @@ class Deployment(Resource):
         
         return _call_n_return(param)
 
+    def put(self, namespace, deployment):
+
+        args = Deployment.parser.parse_args()
+
+        param = dict(
+                api = 'patch_deployment' ,
+                namespace   = namespace,
+                deployment_name = deployment,
+                body = args['deployment_object']
+            )
+        
+        return _call_n_return(param)
+
 class CustomObject(Resource):
 
     parser = reqparse.RequestParser()
-    parser.add_argument('group', type=str)
-    parser.add_argument('version', type=str)
-    parser.add_argument('plural', type=str)
-    parser.add_argument('patch_function_name', type=str)
-    parser.add_argument('patch_function_code', type=str)
+#    parser.add_argument('patch_function_name', type=str)
+#    parser.add_argument('patch_function_code', type=str)
+    parser.add_argument('custom_object', type=dict)
 
-    def get(self, namespace, custom_object_name):
-        return {"message":"OK"}, status.HTTP_200_OK 
+    def get(self, namespace, group, version, plural, custom_object_name):
 
-    def put(self, namespace, custom_object_name):
+        param = dict(
+                api = 'get_custom_object' ,
+                namespace   = namespace,
+                object_name = custom_object_name,
+                group       = group,
+                version     = version,
+                plural      = plural,
+            )
+        
+        return _call_n_return(param)
+
+    def put(self, namespace, group, version, plural, custom_object_name):
 
         args = CustomObject.parser.parse_args()
 
@@ -127,11 +164,24 @@ class CustomObject(Resource):
                 api = 'patch_custom_object' ,
                 namespace   = namespace,
                 object_name = custom_object_name,
-                group = args['group'],
-                version = args['version'],
-                plural = args['plural'],
-                patch_function_name = args['patch_function_name'],
-                patch_function_code = args['patch_function_code'],
+                group       = group,
+                version     = version,
+                plural      = plural,
+#                patch_function_name = args['patch_function_name'],
+#                patch_function_code = args['patch_function_code'],
+                custom_object = args['custom_object']
+            )
+        
+        return _call_n_return(param)
+    
+class Job(Resource):
+
+    def delete(self, namespace, job):
+
+        param = dict(
+                api = 'delete_job' ,
+                namespace = namespace,
+                job_name = job,
             )
         
         return _call_n_return(param)
@@ -157,5 +207,7 @@ api.add_resource(Services, '/k8s/services/<string:namespace>', endpoint='service
 api.add_resource(Service, '/k8s/service/<string:namespace>/<string:service>', endpoint='service')
 api.add_resource(Deployments, '/k8s/deployments/<string:namespace>', endpoint='deployments')
 api.add_resource(Deployment, '/k8s/deployment/<string:namespace>/<string:deployment>', endpoint='deployment')
-api.add_resource(CustomObject, '/k8s/customobject/<string:namespace>/<string:custom_object_name>', endpoint='customobject')
+api.add_resource(CustomObject, '/k8s/customobject/<string:namespace>/<string:group>/<string:version>/<string:plural>/<string:custom_object_name>', endpoint='customobject')
 api.add_resource(Jobs, '/k8s/jobs/<string:namespace>', endpoint='jobs')
+api.add_resource(Job, '/k8s/job/<string:namespace>/<string:job>', endpoint='job')
+api.add_resource(Scale, '/k8s/scale/<string:namespace>/<string:deployment>/<int:replicas>', endpoint='scale')

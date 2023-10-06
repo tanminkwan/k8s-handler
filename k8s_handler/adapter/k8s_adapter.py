@@ -126,6 +126,37 @@ class K8SApiCaller(Adapter):
 
         return 1, {"result":"OK"}
 
+    def patch_deployment(self, param:dict) -> tuple[int, dict]:
+
+        namespace   = param['namespace']
+        deployment_name = param['deployment_name']
+        body        = param['body']
+        
+        patched_deployment = self.apisv1api_client.patch_namespaced_deployment(
+            namespace=namespace,
+            name=deployment_name,
+            body=body,
+        )
+
+        return 1, {"result":patched_deployment}
+
+    def change_replicas(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        deployment_name = param['deployment_name']
+        replicas = param['replicas']
+        
+        target_object = self.apisv1api_client.read_namespaced_deployment(deployment_name, namespace)
+        target_object.spec.replicas = replicas
+
+        patched_deployment = self.apisv1api_client.patch_namespaced_deployment(
+            namespace=namespace,
+            name=deployment_name,
+            body=target_object,
+        )
+
+        return 1, {"result":"OK"}
+    
     def delete_deployment(self, param:dict) -> tuple[int, dict]:
 
         namespace = param['namespace']
@@ -144,6 +175,54 @@ class K8SApiCaller(Adapter):
 
         return 1, {"result":"OK"}
     
+    def delete_job(self, param:dict) -> tuple[int, dict]:
+
+        namespace = param['namespace']
+        job_name = param['job_name']
+
+        api_response = self.batchv1api_client.delete_namespaced_job(job_name, namespace)
+
+        return 1, {"result":"OK"}
+
+    def get_custom_object(self, param:dict) -> tuple[int, dict]:
+
+        namespace   = param['namespace']
+        object_name = param['object_name']
+        group       = param['group']
+        version     = param['version']
+        plural      = param['plural']
+
+        target_object = self.customapi_client.get_namespaced_custom_object(
+            group=group, # networking.istio.io
+            version=version, # v1alpha3
+            namespace=namespace, # wta
+            plural=plural, # virtualservices
+            name=object_name # wta-external
+        )
+
+        return 1, {"result":target_object}
+
+    def patch_custom_object(self, param:dict) -> tuple[int, dict]:
+
+        namespace   = param['namespace']
+        object_name = param['object_name']
+        group       = param['group']
+        version     = param['version']
+        plural      = param['plural']
+        body        = param['custom_object']
+        
+        patched_object = self.customapi_client.patch_namespaced_custom_object(
+            group=group,
+            version=version,
+            namespace=namespace,
+            plural=plural,
+            name=object_name,
+            body=body,
+        )
+
+        return 1, {"result":patched_object}
+
+    """
     def patch_custom_object(self, param:dict) -> tuple[int, dict]:
 
         namespace   = param['namespace']
@@ -177,6 +256,6 @@ class K8SApiCaller(Adapter):
         )
 
         return 1, {"result":"OK"}
-
+    """
     def get_status(self) -> int:
         return 1
